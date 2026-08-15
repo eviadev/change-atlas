@@ -5,7 +5,7 @@ import json
 from pathlib import Path
 from typing import Sequence
 
-from .analysis import explain_file
+from .analysis import explain_file, explain_line
 from .git_history import GitHistoryError, hotspots
 from .graph import build_temporal_graph
 
@@ -22,6 +22,11 @@ def _parser() -> argparse.ArgumentParser:
     story.add_argument("path", help="Repository-relative file path")
     story.add_argument("--limit", type=int, default=10)
     story.add_argument("--json", action="store_true", dest="as_json")
+
+    why = subparsers.add_parser("why", help="Trace one current line to its last-change evidence")
+    why.add_argument("path", help="Repository-relative file path")
+    why.add_argument("--line", type=int, required=True, help="Current one-based line number")
+    why.add_argument("--json", action="store_true", dest="as_json")
 
     hot = subparsers.add_parser("hotspots", help="Rank files by change frequency and churn")
     hot.add_argument("--limit", type=int, default=10)
@@ -46,6 +51,16 @@ def main(argv: Sequence[str] | None = None) -> int:
                 for item in story.evidence:
                     citation = item.url or item.sha
                     print(f"- {item.authored_at[:10]} {item.subject} — {citation}")
+        elif args.command == "why":
+            story = explain_line(repo, args.path, args.line)
+            if args.as_json:
+                print(json.dumps(story.to_dict(), indent=2))
+            else:
+                print(story.summary)
+                print(f"> {story.content}")
+                print(f"- commit: {story.commit.url or story.commit.sha}")
+                for reference in story.references:
+                    print(f"- {reference.kind}: {reference.url or reference.label}")
         elif args.command == "hotspots":
             items = hotspots(repo, limit=args.limit)
             if args.as_json:

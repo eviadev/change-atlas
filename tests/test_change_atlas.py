@@ -2,7 +2,7 @@ from pathlib import Path
 import json
 import subprocess
 
-from change_atlas.analysis import explain_file
+from change_atlas.analysis import explain_file, explain_line
 from change_atlas.cli import main
 from change_atlas.git_history import hotspots
 from change_atlas.graph import build_temporal_graph
@@ -49,7 +49,13 @@ def history_repo(tmp_path: Path) -> tuple[Path, list[str]]:
         encoding="utf-8",
     )
     (repo / "test_service.py").write_text("def test_retry_budget():\n    assert True\n", encoding="utf-8")
-    commits.append(commit(repo, "fix: cap retry budget", "Avoid infinite retries during outages."))
+    commits.append(
+        commit(
+            repo,
+            "fix: cap retry budget",
+            "Avoid infinite retries during outages.\n\nFixes #42.",
+        )
+    )
     return repo, commits
 
 
@@ -93,13 +99,59 @@ def test_temporal_graph_links_commits_to_changed_files(tmp_path: Path):
     graph = build_temporal_graph(repo)
     commit_nodes = [node for node in graph.nodes if node.kind == "commit"]
     file_nodes = [node for node in graph.nodes if node.kind == "file"]
+    reference_nodes = [node for node in graph.nodes if node.kind == "reference"]
 
     assert len(commit_nodes) == 3
     assert {node.label for node in file_nodes} == {"README.md", "service.py", "test_service.py"}
-    assert len(graph.edges) == 4
+    assert [node.label for node in reference_nodes] == ["#42"]
+    assert len(graph.edges) == 5
     assert any(
         edge.source == f"commit:{commits[-1]}"
         and edge.target == "file:service.py"
         and edge.kind == "touches"
         for edge in graph.edges
     )
+    assert any(
+        edge.source == f"commit:{commits[-1]}"
+        and edge.target == "reference:https://github.com/example/history/issues/42"
+        and edge.kind == "references"
+        for edge in graph.edges
+    )
+
+
+def test_line_story_connects_blame_to_commit_and_intent_reference(tmp_path: Path):
+    repo, commits = history_repo(tmp_path)
+
+    story = explain_line(repo, "service.py", 7)
+
+    assert story.line == 7
+    assert story.original_line == 7
+    assert story.content == "    raise RuntimeError('retry budget exhausted')"
+    assert story.commit.sha == commits[-1]
+    assert "Fixes #42" in story.commit.body
+    assert story.commit.url == f"https://github.com/example/history/commit/{commits[-1]}"
+    assert story.references[0].label == "#42"
+    assert story.references[0].url == "https://github.com/example/history/issues/42"
+    assert "Git blame attributes service.py:7" in story.summary
+
+
+def test_cli_can_explain_one_line_as_json(tmp_path: Path, capsys):
+    repo, commits = history_repo(tmp_path)
+
+    exit_code = main(["--repo", str(repo), "why", "service.py", "--line", "7", "--json"])
+    payload = json.loads(capsys.readouterr().out)
+
+    assert exit_code == 0
+    assert payload["commit"]["sha"] == commits[-1]
+    assert payload["references"][0]["value"] == "42"
+
+
+def test_line_story_rejects_invalid_line(tmp_path: Path):
+    repo, _ = history_repo(tmp_path)
+
+    try:
+        explain_line(repo, "service.py", 0)
+    except ValueError as error:
+        assert str(error) == "line must be greater than zero"
+    else:
+        raise AssertionError("expected an invalid line to fail")
