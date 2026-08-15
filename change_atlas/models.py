@@ -36,6 +36,37 @@ class FileStory:
 
 
 @dataclass(frozen=True)
+class ReferenceEvidence:
+    kind: str
+    label: str
+    value: str
+    url: str | None = None
+
+
+@dataclass(frozen=True)
+class BlamedLine:
+    path: str
+    line: int
+    original_line: int
+    content: str
+    commit: CommitEvidence
+
+
+@dataclass(frozen=True)
+class LineStory:
+    path: str
+    line: int
+    original_line: int
+    content: str
+    summary: str
+    commit: CommitEvidence
+    references: tuple[ReferenceEvidence, ...]
+
+    def to_dict(self) -> dict:
+        return asdict(self)
+
+
+@dataclass(frozen=True)
 class Hotspot:
     path: str
     commits: int

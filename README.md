@@ -3,9 +3,9 @@
 > Software archaeology with evidence: understand why code exists, not only what it does.
 
 ChangeAtlas reconstructs the evolution of a codebase from Git history and returns
-answers that cite their sources. The first vertical slice explains a file through
-the commits that introduced and changed it, then ranks architectural hotspots by
-change frequency and line churn.
+answers that cite their sources. It can reconstruct a file's history, attribute a
+specific current line to its last-changing commit, surface intent references from
+that commit, and rank architectural hotspots by change frequency and line churn.
 
 ## Why this is not another repository chatbot
 
@@ -16,8 +16,11 @@ ChangeAtlas starts with an evidence graph:
 flowchart LR
     G[Git history] --> E[Typed evidence]
     E --> S[File story]
+    E --> L[Line provenance]
     E --> H[Change hotspots]
     S --> C[Commit citations]
+    L --> C
+    L --> R[Issue and PR references]
     H --> C
     C --> M[Future model-assisted synthesis]
 ```
@@ -36,6 +39,7 @@ source .venv/bin/activate
 python -m pip install -e ".[dev]"
 
 change-atlas --repo /path/to/repository file src/payment/retry.py
+change-atlas --repo /path/to/repository why src/payment/retry.py --line 42
 change-atlas --repo /path/to/repository hotspots --limit 10
 change-atlas --repo /path/to/repository graph --output evidence-graph.json
 ```
@@ -44,6 +48,7 @@ Machine-readable output is available with `--json`:
 
 ```bash
 change-atlas --repo . file change_atlas/git_history.py --json
+change-atlas --repo . why change_atlas/git_history.py --line 42 --json
 ```
 
 ## Example answer contract
@@ -68,13 +73,15 @@ change-atlas --repo . file change_atlas/git_history.py --json
 - Capture author, timestamp, subject, body, paths, additions, and deletions.
 - Normalize HTTPS and SSH GitHub remotes into commit citations.
 - Explain a file using its origin and latest evolution.
+- Attribute a current line to its last-changing commit with `git blame`.
+- Extract local and cross-repository GitHub issue, PR, and commit references from intent text.
 - Rank hotspots by commit count and line churn.
 - Export a deterministic temporal `commit → file` evidence graph.
 - Test the complete workflow against temporary real Git repositories.
 
 ## Roadmap
 
-- Extend the temporal evidence graph to tests, PRs, issues, and ADRs.
+- Add extracted issue and PR references to the temporal evidence graph.
 - Detect architectural decision points instead of treating every commit equally.
 - Add evaluation fixtures for citation completeness and temporal faithfulness.
 - Add an optional local or hosted model adapter that can only summarize supplied evidence.

@@ -4,7 +4,7 @@ from pathlib import Path
 import re
 import subprocess
 
-from .models import CommitEvidence, FileChange, Hotspot
+from .models import BlamedLine, CommitEvidence, FileChange, Hotspot
 
 
 class GitHistoryError(RuntimeError):
@@ -56,8 +56,13 @@ def _parse_commit_records(output: str, remote: str | None) -> tuple[CommitEviden
         record = raw_record.strip("\n")
         if not record:
             continue
-        header, *change_lines = record.splitlines()
-        fields = header.split("\x1f", 4)
+        metadata, separator, changes = record.partition("\x1d")
+        if not separator:
+            metadata, *legacy_changes = record.splitlines()
+            change_lines = legacy_changes
+        else:
+            change_lines = changes.strip("\n").splitlines()
+        fields = metadata.strip("\n").split("\x1f", 4)
         if len(fields) != 5:
             continue
         sha, author, authored_at, subject, body = fields
@@ -96,7 +101,7 @@ def file_commits(
         "--follow",
         f"--max-count={limit}",
         "--date=iso-strict",
-        "--format=%x1e%H%x1f%aN%x1f%aI%x1f%s%x1f%b",
+        "--format=%x1e%H%x1f%aN%x1f%aI%x1f%s%x1f%b%x1d",
         "--numstat",
         "--",
         path,
@@ -118,10 +123,66 @@ def repository_commits(
         "log",
         f"--max-count={limit}",
         "--date=iso-strict",
-        "--format=%x1e%H%x1f%aN%x1f%aI%x1f%s%x1f%b",
+        "--format=%x1e%H%x1f%aN%x1f%aI%x1f%s%x1f%b%x1d",
         "--numstat",
     )
     return _parse_commit_records(output, repository_url(repo))
+
+
+def commit_evidence(repo: str | Path, revision: str) -> CommitEvidence:
+    """Return one commit with the same evidence contract used by file stories."""
+
+    output = _run_git(
+        repo,
+        "show",
+        "--date=iso-strict",
+        "--format=%x1e%H%x1f%aN%x1f%aI%x1f%s%x1f%b%x1d",
+        "--numstat",
+        revision,
+        "--",
+    )
+    matches = _parse_commit_records(output, repository_url(repo))
+    if len(matches) != 1:
+        raise GitHistoryError(f"could not resolve commit evidence for {revision}")
+    return matches[0]
+
+
+def blame_line(repo: str | Path, path: str, line: int) -> BlamedLine:
+    """Attribute one current line to the commit that last changed it."""
+
+    if line < 1:
+        raise ValueError("line must be greater than zero")
+    output = _run_git(
+        repo,
+        "blame",
+        "--line-porcelain",
+        "--root",
+        "-L",
+        f"{line},{line}",
+        "HEAD",
+        "--",
+        path,
+    )
+    lines = output.splitlines()
+    if not lines:
+        raise GitHistoryError(f"no blame evidence found for {path}:{line}")
+    header = lines[0].split()
+    if len(header) < 3 or not re.fullmatch(r"[0-9a-f]{40}", header[0]):
+        raise GitHistoryError(f"unexpected blame evidence for {path}:{line}")
+    content_line = next((item[1:] for item in lines if item.startswith("\t")), None)
+    if content_line is None:
+        raise GitHistoryError(f"no source content found for {path}:{line}")
+    filename = next(
+        (item.removeprefix("filename ") for item in lines if item.startswith("filename ")),
+        path,
+    )
+    return BlamedLine(
+        path=filename,
+        line=line,
+        original_line=int(header[1]),
+        content=content_line,
+        commit=commit_evidence(repo, header[0]),
+    )
 
 
 def hotspots(repo: str | Path, *, limit: int = 10) -> tuple[Hotspot, ...]:
