@@ -43,3 +43,28 @@ class Hotspot:
 
     def to_dict(self) -> dict:
         return asdict(self)
+
+
+@dataclass(frozen=True)
+class GraphNode:
+    id: str
+    kind: str
+    label: str
+    data: dict
+
+
+@dataclass(frozen=True)
+class GraphEdge:
+    source: str
+    target: str
+    kind: str
+    data: dict
+
+
+@dataclass(frozen=True)
+class EvidenceGraph:
+    nodes: tuple[GraphNode, ...]
+    edges: tuple[GraphEdge, ...]
+
+    def to_dict(self) -> dict:
+        return asdict(self)

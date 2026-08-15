@@ -5,6 +5,7 @@ import subprocess
 from change_atlas.analysis import explain_file
 from change_atlas.cli import main
 from change_atlas.git_history import hotspots
+from change_atlas.graph import build_temporal_graph
 
 
 def git(repo: Path, *args: str) -> str:
@@ -84,3 +85,21 @@ def test_cli_can_emit_machine_readable_evidence(tmp_path: Path, capsys):
     assert exit_code == 0
     assert payload["path"] == "service.py"
     assert payload["evidence"][0]["sha"] == commits[-1]
+
+
+def test_temporal_graph_links_commits_to_changed_files(tmp_path: Path):
+    repo, commits = history_repo(tmp_path)
+
+    graph = build_temporal_graph(repo)
+    commit_nodes = [node for node in graph.nodes if node.kind == "commit"]
+    file_nodes = [node for node in graph.nodes if node.kind == "file"]
+
+    assert len(commit_nodes) == 3
+    assert {node.label for node in file_nodes} == {"README.md", "service.py", "test_service.py"}
+    assert len(graph.edges) == 4
+    assert any(
+        edge.source == f"commit:{commits[-1]}"
+        and edge.target == "file:service.py"
+        and edge.kind == "touches"
+        for edge in graph.edges
+    )

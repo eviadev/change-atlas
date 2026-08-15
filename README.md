@@ -37,6 +37,7 @@ python -m pip install -e ".[dev]"
 
 change-atlas --repo /path/to/repository file src/payment/retry.py
 change-atlas --repo /path/to/repository hotspots --limit 10
+change-atlas --repo /path/to/repository graph --output evidence-graph.json
 ```
 
 Machine-readable output is available with `--json`:
@@ -68,11 +69,12 @@ change-atlas --repo . file change_atlas/git_history.py --json
 - Normalize HTTPS and SSH GitHub remotes into commit citations.
 - Explain a file using its origin and latest evolution.
 - Rank hotspots by commit count and line churn.
+- Export a deterministic temporal `commit → file` evidence graph.
 - Test the complete workflow against temporary real Git repositories.
 
 ## Roadmap
 
-- Build a temporal evidence graph across files, commits, tests, PRs, issues, and ADRs.
+- Extend the temporal evidence graph to tests, PRs, issues, and ADRs.
 - Detect architectural decision points instead of treating every commit equally.
 - Add evaluation fixtures for citation completeness and temporal faithfulness.
 - Add an optional local or hosted model adapter that can only summarize supplied evidence.

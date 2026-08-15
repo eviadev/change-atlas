@@ -50,30 +50,8 @@ def _parse_numstat(line: str) -> FileChange | None:
     return FileChange(path=path, additions=additions, deletions=deletions)
 
 
-def file_commits(
-    repo: str | Path,
-    path: str,
-    *,
-    limit: int = 20,
-) -> tuple[CommitEvidence, ...]:
-    """Return newest-first commits that explain a file, following renames."""
-
-    if limit < 1:
-        raise ValueError("limit must be greater than zero")
-    output = _run_git(
-        repo,
-        "log",
-        "--follow",
-        f"--max-count={limit}",
-        "--date=iso-strict",
-        "--format=%x1e%H%x1f%aN%x1f%aI%x1f%s%x1f%b",
-        "--numstat",
-        "--",
-        path,
-    )
-    remote = repository_url(repo)
+def _parse_commit_records(output: str, remote: str | None) -> tuple[CommitEvidence, ...]:
     evidence: list[CommitEvidence] = []
-
     for raw_record in output.split("\x1e"):
         record = raw_record.strip("\n")
         if not record:
@@ -100,6 +78,50 @@ def file_commits(
             )
         )
     return tuple(evidence)
+
+
+def file_commits(
+    repo: str | Path,
+    path: str,
+    *,
+    limit: int = 20,
+) -> tuple[CommitEvidence, ...]:
+    """Return newest-first commits that explain a file, following renames."""
+
+    if limit < 1:
+        raise ValueError("limit must be greater than zero")
+    output = _run_git(
+        repo,
+        "log",
+        "--follow",
+        f"--max-count={limit}",
+        "--date=iso-strict",
+        "--format=%x1e%H%x1f%aN%x1f%aI%x1f%s%x1f%b",
+        "--numstat",
+        "--",
+        path,
+    )
+    return _parse_commit_records(output, repository_url(repo))
+
+
+def repository_commits(
+    repo: str | Path,
+    *,
+    limit: int = 200,
+) -> tuple[CommitEvidence, ...]:
+    """Return repository-wide commit evidence for temporal graph construction."""
+
+    if limit < 1:
+        raise ValueError("limit must be greater than zero")
+    output = _run_git(
+        repo,
+        "log",
+        f"--max-count={limit}",
+        "--date=iso-strict",
+        "--format=%x1e%H%x1f%aN%x1f%aI%x1f%s%x1f%b",
+        "--numstat",
+    )
+    return _parse_commit_records(output, repository_url(repo))
 
 
 def hotspots(repo: str | Path, *, limit: int = 10) -> tuple[Hotspot, ...]:
