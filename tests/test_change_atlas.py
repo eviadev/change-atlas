@@ -99,14 +99,22 @@ def test_temporal_graph_links_commits_to_changed_files(tmp_path: Path):
     graph = build_temporal_graph(repo)
     commit_nodes = [node for node in graph.nodes if node.kind == "commit"]
     file_nodes = [node for node in graph.nodes if node.kind == "file"]
+    reference_nodes = [node for node in graph.nodes if node.kind == "reference"]
 
     assert len(commit_nodes) == 3
     assert {node.label for node in file_nodes} == {"README.md", "service.py", "test_service.py"}
-    assert len(graph.edges) == 4
+    assert [node.label for node in reference_nodes] == ["#42"]
+    assert len(graph.edges) == 5
     assert any(
         edge.source == f"commit:{commits[-1]}"
         and edge.target == "file:service.py"
         and edge.kind == "touches"
+        for edge in graph.edges
+    )
+    assert any(
+        edge.source == f"commit:{commits[-1]}"
+        and edge.target == "reference:https://github.com/example/history/issues/42"
+        and edge.kind == "references"
         for edge in graph.edges
     )
 

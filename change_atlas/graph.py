@@ -2,6 +2,7 @@
 
 from pathlib import Path
 
+from .analysis import extract_references
 from .git_history import repository_commits
 from .models import EvidenceGraph, GraphEdge, GraphNode
 
@@ -28,6 +29,30 @@ def build_temporal_graph(
                 "url": commit.url,
             },
         )
+        for reference in extract_references(commit):
+            reference_key = reference.url or f"{reference.kind}:{reference.value}"
+            reference_id = f"reference:{reference_key}"
+            nodes.setdefault(
+                reference_id,
+                GraphNode(
+                    id=reference_id,
+                    kind="reference",
+                    label=reference.label,
+                    data={
+                        "reference_kind": reference.kind,
+                        "value": reference.value,
+                        "url": reference.url,
+                    },
+                ),
+            )
+            edges.append(
+                GraphEdge(
+                    source=commit_id,
+                    target=reference_id,
+                    kind="references",
+                    data={},
+                )
+            )
         for change in commit.changes:
             file_id = f"file:{change.path}"
             nodes.setdefault(
@@ -48,5 +73,5 @@ def build_temporal_graph(
 
     return EvidenceGraph(
         nodes=tuple(sorted(nodes.values(), key=lambda node: node.id)),
-        edges=tuple(sorted(edges, key=lambda edge: (edge.source, edge.target))),
+        edges=tuple(sorted(edges, key=lambda edge: (edge.source, edge.target, edge.kind))),
     )

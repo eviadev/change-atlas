@@ -76,12 +76,12 @@ change-atlas --repo . why change_atlas/git_history.py --line 42 --json
 - Attribute a current line to its last-changing commit with `git blame`.
 - Extract local and cross-repository GitHub issue, PR, and commit references from intent text.
 - Rank hotspots by commit count and line churn.
-- Export a deterministic temporal `commit → file` evidence graph.
+- Export a deterministic temporal graph linking commits to files and intent references.
 - Test the complete workflow against temporary real Git repositories.
 
 ## Roadmap
 
-- Add extracted issue and PR references to the temporal evidence graph.
+- Add test and ADR evidence to the temporal graph alongside existing issue and PR references.
 - Detect architectural decision points instead of treating every commit equally.
 - Add evaluation fixtures for citation completeness and temporal faithfulness.
 - Add an optional local or hosted model adapter that can only summarize supplied evidence.
